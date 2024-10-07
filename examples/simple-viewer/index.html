@@ -5,15 +5,17 @@
     <title>simple-viewer</title>
 </head>
 <body>
-    <canvas id="canvas" width="480" height="320"></canvas>
+    <canvas id="canvas" width="1920" height="1080"></canvas>
 
-    <script src="../deps/three/build/three.min.js"></script>
+    <script src="../deps/three/build/three.min.js"></script> 
     <script src="../deps/three/examples/js/controls/OrbitControls.js"></script>
     <script src="../deps/three/examples/js/libs/stats.min.js"></script>
-
     <script src="../../dist/three-geo.min.js"></script>
+    <script src="../deps/three/examples/js/exporter/GLTFExporter.js"></script>
+    <script src="../deps/three/examples/js/exporter/TextureUtils.js"></script>
 
     <script type="module">
+      
     (async () => {
         THREE.Object3D.DefaultUp = new THREE.Vector3(0, 0, 1);
 
@@ -43,24 +45,84 @@
         controls.addEventListener('change', render);
         render(); // first time
 
-        const ioToken = 'pk.eyJ1IjoiamRldmVsIiwiYSI6ImNqemFwaGJoZjAyc3MzbXA1OGNuODBxa2EifQ.7M__SgfWZGJuEiSqbBXdoQ';
+        const ioToken = 'pk.eyJ1IjoiZGllZ294ciIsImEiOiJjbTF2OG05czMwOTQ4MmpzN2trZnpzdG1kIn0.s_AuYSVo5HafXG9gYSXbpA';
 
         const tgeo = new ThreeGeo({
             tokenMapbox: ioToken, // <---- set your Mapbox API token here
         });
 
-        if (!window.location.origin.startsWith('https://w3reality.github.io') && tgeo.tokenMapbox === ioToken) {
-            const warning = 'Please set your Mapbox API token in ThreeGeo constructor.';
-            alert(warning);
-            throw warning;
-        }
-
         const terrain = await tgeo.getTerrainRgb(
-            [46.5763, 7.9904], // [lat, lng]
-            5.0,               // radius of bounding circle (km)
-            12);               // zoom resolution
+            [41.410187, 2.143865], // [lat, lng]
+            1,               // radius of bounding circle (km). This increases the map size. So It increases the number of tiles.
+            10);               // This does not increase the map size but increasizes the texture size. Try not to extend beyond 15. If it goes below 3 it shows the complete world
 
         scene.add(terrain);
+
+        if (scene == null) {
+            // console.log("Scene is null");
+            return;
+        }
+
+        // Specify export options
+        const options = {
+            binary: true, // This specifies that the output should be in GLB format
+        };
+
+        // console.log("Exporting Gltf again");
+
+        // Instantiate a exporter
+        const exporter = new GLTFExporter();
+
+        console.log("PAPA");
+
+        // Ensure all textures are loaded and valid
+        scene.traverse((object) => {
+            if ( object instanceof THREE.Mesh && object.material) {
+                let materials = object.material;
+                if (!Array.isArray(materials)) {
+                    materials = [materials];
+                }
+                materials.forEach((/** @type {{ map: { image: any; }; }} */ material) => {
+                    if (material.map && !material.map.image) {
+                        console.log(`Material map ${object.name} texture is not loaded: ${material.map}`);
+                        throw new Error('Texture not loaded');
+                    }
+                });
+            }
+        });
+
+        // Parse the input and generate the glTF output
+        exporter.parse(
+            scene,
+            // called when the gltf has been generated
+            function (gltf) {
+                // console.log(gltf);
+                gltf;
+
+                if (gltf instanceof ArrayBuffer) {
+                    const blob = new Blob([gltf], {
+                        type: "model/gltf-binary",
+                    });
+                    const url = URL.createObjectURL(blob);
+                    // Now you can use this URL with <model-viewer>
+                    //modelUrl = url;  Assuming `modelUrl` is a reactive variable in Svelte
+                    //gltfIsReady = true;
+                    // Example: Download the file
+                    // const link = document.createElement('a');
+                    // link.href = url;
+                    // link.download = 'scene.glb';
+                    // document.body.appendChild(link);
+                    // link.click();
+                    // document.body.removeChild(link);
+                }
+            },
+            // called when there is an error in the generation
+            function (error) {
+                console.log("An error happened");
+                console.log(error);
+            },
+            options,
+        );
 
         render();
     })();
